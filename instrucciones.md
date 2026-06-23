@@ -24,6 +24,11 @@ Placa de referencia: **STEMLab 125-14**, IP `10.42.0.180`, ecosistema `2.07-51`.
 
 7. **Escala del espectrograma waterfall** (DFT Spectrum Analyser): corrige la posición de los números de escala para que aparezcan al pie del gráfico en lugar del centro.
 
+8. **Tamaño de `root_plot` y `root_waterfall`** (DFT Spectrum Analyser): reduce ambos bloques un ~25% para que entren en pantalla sin scroll.
+   - CSS: `.waterfall-holder` 280 px → 210 px, canvas/graph 240 px → 180 px, margen `.wait` -120 px → -90 px.
+   - JS `scope.js`: fórmula de altura del contenedor waterfall `95 × canales + 10` → `220 × canales + 10` (evita overflow sobre el bloque `root_plot`).
+   - JS `scope.js`: posición de la escala `top: 248px` → `top: 188px` (180 px de canvas + 8 px de margen).
+
 ---
 
 ## Archivos locales necesarios
@@ -68,6 +73,7 @@ cp $BASE/network_manager/index.html $BASE/network_manager/index.html.bak
 cp $BASE/scpi_manager/index.html    $BASE/scpi_manager/index.html.bak
 cp $BASE/calib_app/index.html       $BASE/calib_app/index.html.bak
 cp $BASE/spectrumpro/js/scope.js    $BASE/spectrumpro/js/scope.js.bak
+cp $BASE/spectrumpro/css/style.css  $BASE/spectrumpro/css/style.css.bak
 ```
 
 ### 3. Subir archivos locales
@@ -184,11 +190,25 @@ for p in css_files:
     )
     save(p, updated)
 
-# ── scope.js: escala del waterfall al pie del gráfico ────────────────────────
+# ── scope.js: escala del waterfall al pie del gráfico + tamaño del contenedor ─
 p = f'{BASE}/spectrumpro/js/scope.js'
 c = patch(p)
-c = c.replace('modifynode.css("top","65px")', 'modifynode.css("top","248px")')
+c = c.replace('modifynode.css("top","65px")', 'modifynode.css("top","188px")')
+c = c.replace('95 * SPEC.visibleCount() + 10', '220 * SPEC.visibleCount() + 10')
 save(p, c)
+
+# ── spectrumpro/css/style.css: reducir tamaño de root_plot y root_waterfall ───
+import subprocess
+css = f'{BASE}/spectrumpro/css/style.css'
+subprocess.run(['sed', '-i',
+    '-e', 's/min-height: 280px;/min-height: 210px;/g',
+    '-e', 's/max-height: 280px;/max-height: 210px;/g',
+    '-e', 's/min-height: 240px;/min-height: 180px;/g',
+    '-e', 's/max-height: 240px;/max-height: 180px;/g',
+    '-e', 's/height: 240px;/height: 180px;/g',
+    '-e', 's/margin-top: -120px;/margin-top: -90px;/g',
+    css], check=True)
+print(f'OK: spectrumpro/css/style.css')
 
 EOF
 ```
@@ -222,7 +242,8 @@ for f in \
   network_manager/index.html \
   scpi_manager/index.html \
   calib_app/index.html \
-  spectrumpro/js/scope.js
+  spectrumpro/js/scope.js \
+  spectrumpro/css/style.css
 do
   [ -f "$BASE/$f.bak" ] && cp "$BASE/$f.bak" "$BASE/$f" && echo "restored: $f"
 done
@@ -273,5 +294,6 @@ Los grupos `System` y `Development` siempre se muestran — no son apps, se agre
 - El favicon se generó convirtiendo `logo4.png` (116×187px RGBA) a formato ICO con 3 tamaños (16×16, 32×32, 48×48) usando Python PIL. El archivo `favicon.ico` local ya contiene esta conversión.
 - El ícono `logo6.png` fue redimensionado a 36×22px (proporción original 223×139) y guardado como `logos/logo6_icon.png`. El archivo subido a la placa como `logo6.png` es esa versión redimensionada.
 - El logo de navbar `logo1.png` (782×147px) se muestra con `width=110` y `margin: 11px 0px 0px 14px` para centrarlo verticalmente en la navbar Bootstrap de 50px de altura.
-- La escala del waterfall en DFT (`spectrumpro/js/scope.js`) clona etiquetas del eje X del gráfico Flot y las reposiciona con `top` fijo. El valor original era `65px` (quedaba en el medio del canvas de 240px dentro del holder de 280px). El valor correcto es `248px` (240px del canvas + 8px de margen).
+- La escala del waterfall en DFT (`spectrumpro/js/scope.js`) clona etiquetas del eje X del gráfico Flot y las reposiciona con `top` fijo. El valor original era `65px` (quedaba en el medio del canvas). Tras la reducción de tamaño el valor correcto es `188px` (180px de canvas + 8px de margen).
+- Los bloques `root_plot` (flex: 1) y `root_waterfall` del DFT se dimensionan así: `root_plot` toma el espacio restante del viewport menos lo que ocupa `root_waterfall`. La altura visual del waterfall la controla el CSS de `.waterfall-holder` (210px por canal). La fórmula JS `220 × canales + 10` setea la altura del *contenedor* `root_waterfall` para que coincida con el contenido CSS y no haya overflow que cause scroll en el body.
 - El filtro whitelist en `black_list_app.js` actúa dentro de `Desktop.filterApps()`, que corre después de asignar grupos a las apps pero antes de agregar los íconos de grupo al DOM. Por eso `System` y `Development` no son afectados por el filtro.
