@@ -1,6 +1,10 @@
 # Modificación de interfaz web Red Pitaya STEMLab 125-14
 
-Placa de referencia: **STEMLab 125-14**, IP `10.42.0.180`, ecosistema `2.07-51`.
+Placa de referencia original: **STEMLab 125-14**, IP `10.42.0.180`, ecosistema `2.07-51`.
+Placa de campo (sand monitoring): IP `192.168.0.54` (varía según red), ecosistema `3.00-e00665135` (kernel 2026.1).
+
+> **Los valores en px del punto 8 son específicos del ecosistema y NO son intercambiables entre versiones.**
+> Antes de aplicar el paso 8 en una placa nueva, verificar los valores de stock reales (ver "Antes de tocar el waterfall" más abajo) — aplicarlos a ciegas dejó el waterfall roto (franja angosta + hueco enorme) la primera vez que se corrió este doc contra la placa de ecosistema `3.00`.
 
 ---
 
@@ -24,10 +28,41 @@ Placa de referencia: **STEMLab 125-14**, IP `10.42.0.180`, ecosistema `2.07-51`.
 
 7. **Escala del espectrograma waterfall** (DFT Spectrum Analyser): corrige la posición de los números de escala para que aparezcan al pie del gráfico en lugar del centro.
 
-8. **Tamaño de `root_plot` y `root_waterfall`** (DFT Spectrum Analyser): reduce ambos bloques un ~25% para que entren en pantalla sin scroll.
+8. **Tamaño de `root_plot` y `root_waterfall`** (DFT Spectrum Analyser): ajusta ambos bloques para que el waterfall se vea bien y entre en pantalla sin scroll. El tamaño de stock varía por ecosistema — ver tabla abajo.
+
+### Antes de tocar el waterfall: verificar valores de stock
+
+El tamaño del waterfall depende de 4 cosas que hay que revisar en la placa ANTES de tocar nada (los valores de ejemplo son de las dos placas ya probadas):
+
+| Elemento | Dónde | Ecosistema `2.07-51` (original) | Ecosistema `3.00` (campo) |
+|---|---|---|---|
+| Canvas/graph CSS | `.waterfall-holder .waterfall-graph` min/max-height | 240px | 60px |
+| Holder CSS | `.waterfall-holder` min/max-height | 280px | 80px |
+| **Resolución real del canvas (JS, no CSS)** | `scope.js`: `$.createWaterfall(..., N)` (×4, una por canal) y `setSize(ww, N)` en el resize handler | 240 | 60 |
+| Multiplicador contenedor | `scope.js`: `N * SPEC.visibleCount() + 10` | 95 (stock) | 95 (stock) |
+| Offset de escala | `scope.js`: `modifynode.css("top","Npx")` | 65px (stock, antes de reducir) | 65px (stock) |
+
+**El punto que instrucciones.md original NO documentaba**: la resolución real de dibujo del canvas está hardcodeada en JS (`createWaterfall(..., 60)` y `setSize(ww, 60)`), separada del tamaño CSS. Agrandar/achicar solo el CSS sin tocar estos valores de JS deja el canvas estirado o con un hueco vacío — hay que cambiar los dos juntos, al mismo número.
+
+**Segundo punto que tampoco se documentaba, y causó una vuelta extra en la placa de campo**: además de `.waterfall-holder .waterfall-graph` (la altura del DIV contenedor), existe una regla CSS separada `.waterfall_canvas { height: 60px; }` (con guión bajo, distinta clase) que aplica directo sobre el `<canvas>` real que crea `waterfall.js`. Esta regla es MÁS específica que la del div contenedor y gana la cascada — si no se cambia también, el canvas visualmente queda clavado en 60px aunque el contenedor, la resolución JS y todo lo demás ya estén en el valor nuevo (así se ve: franja de color chica arriba + hueco vacío abajo dentro de un contenedor que sí creció). Buscar `grep -n 'waterfall_canvas' css/style.css` (guión bajo) antes de dar por buena cualquier corrección de tamaño — es fácil de pasar por alto porque el nombre es casi idéntico a `.waterfall-holder` / `.waterfall-graph` (guión medio).
+
+**Cómo elegir los nuevos valores** (ejemplo: agrandar canvas de 60px a 180px en la placa de campo):
+1. Canvas nuevo = el que se quiera (ej. 180px). Aplicar ese mismo número en CSS (`.waterfall-graph`) y en JS (los 5 lugares con la resolución hardcodeada).
+2. Holder nuevo = canvas_nuevo + (holder_stock − canvas_stock). Ej: 180 + (80−60) = 200px.
+3. Multiplicador nuevo = holder_nuevo + (multiplicador_stock − holder_stock). Ej: 200 + (95−80) = 215.
+4. Offset de escala nuevo = canvas_nuevo + (offset_stock − canvas_stock). Ej: 180 + (65−60) = 185px.
+
+Aplicado finalmente así en la placa de campo (ecosistema `3.00`, canvas 60→300px, tras dos vueltas — la primera a 180px no incluía el fix de `.waterfall_canvas`):
+   - CSS: `.waterfall-holder` 80px → 320px, `.waterfall-holder .waterfall-graph` 60px → 300px, **`.waterfall_canvas` 60px → 300px (el fix real, ver arriba)**.
+   - JS `scope.js`: las 5 llamadas de resolución del canvas (`createWaterfall` ×4 + `setSize`) `60` → `300`.
+   - JS `scope.js`: fórmula de altura del contenedor waterfall `95 × canales + 10` → `335 × canales + 10`.
+   - JS `scope.js`: posición de la escala `top: 65px` → `top: 305px`.
+
+En la placa original de referencia (ecosistema `2.07-51`, canvas 240→180px, es decir una *reducción*) se había aplicado:
    - CSS: `.waterfall-holder` 280 px → 210 px, canvas/graph 240 px → 180 px, margen `.wait` -120 px → -90 px.
-   - JS `scope.js`: fórmula de altura del contenedor waterfall `95 × canales + 10` → `220 × canales + 10` (evita overflow sobre el bloque `root_plot`).
+   - JS `scope.js`: fórmula de altura del contenedor waterfall `95 × canales + 10` → `220 × canales + 10`.
    - JS `scope.js`: posición de la escala `top: 248px` → `top: 188px` (180 px de canvas + 8 px de margen).
+   - (esa placa no tenía el problema del canvas hardcodeado documentado — no se verificó en su momento; si se vuelve a tocar esa placa, revisar `createWaterfall`/`setSize` igual que en el punto de arriba antes de asumir que solo el CSS alcanza)
 
 ---
 
