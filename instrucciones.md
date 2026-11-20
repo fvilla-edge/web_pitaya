@@ -2,6 +2,7 @@
 
 Placa de referencia original: **STEMLab 125-14**, IP `10.42.0.180`, ecosistema `2.07-51`.
 Placa de campo (sand monitoring): IP `192.168.0.54` (varía según red), ecosistema `3.00-e00665135` (kernel 2026.1).
+Placa de laboratorio `rp-f0fd8c` (ecosistema 3.00): aplicado con `aplicar_mods.py` el 20/11/2026 (demo del 10/12).
 
 > **Los valores en px del punto 8 son específicos del ecosistema y NO son intercambiables entre versiones.**
 > Antes de aplicar el paso 8 en una placa nueva, verificar los valores de stock reales (ver "Antes de tocar el waterfall" más abajo) — aplicarlos a ciegas dejó el waterfall roto (franja angosta + hueco enorme) la primera vez que se corrió este doc contra la placa de ecosistema `3.00`.
@@ -93,160 +94,42 @@ ssh root@<IP_PLACA>
 mount -o remount,rw /opt/redpitaya
 ```
 
-### 2. Hacer backups
+### 2. Respaldar el favicon de stock (se pisa con scp)
 
 ```bash
-BASE=/opt/redpitaya/www/apps
-
-cp $BASE/assets/black_list_app.js   $BASE/assets/black_list_app.js.bak
-cp $BASE/favicon.ico                $BASE/favicon.ico.bak
-cp $BASE/index.html                 $BASE/index.html.bak
-cp $BASE/scopegenpro/index.html     $BASE/scopegenpro/index.html.bak
-cp $BASE/spectrumpro/index.html     $BASE/spectrumpro/index.html.bak
-cp $BASE/updater/index.html         $BASE/updater/index.html.bak
-cp $BASE/network_manager/index.html $BASE/network_manager/index.html.bak
-cp $BASE/scpi_manager/index.html    $BASE/scpi_manager/index.html.bak
-cp $BASE/calib_app/index.html       $BASE/calib_app/index.html.bak
-cp $BASE/spectrumpro/js/scope.js    $BASE/spectrumpro/js/scope.js.bak
-cp $BASE/spectrumpro/css/style.css  $BASE/spectrumpro/css/style.css.bak
+B=/opt/redpitaya/www/apps
+[ -f $B/favicon.ico.bak ] || cp -p $B/favicon.ico $B/favicon.ico.bak
 ```
 
-### 3. Subir archivos locales
-
-Ejecutar desde la máquina local:
+### 3. Subir logos y script (desde la PC)
 
 ```bash
 IP=<IP_PLACA>
 BASE=root@$IP:/opt/redpitaya/www/apps
 
-scp /home/facu-edge/web_pitaya/black_list_app.js     $BASE/assets/black_list_app.js
 scp /home/facu-edge/web_pitaya/favicon.ico           $BASE/favicon.ico
 scp /home/facu-edge/web_pitaya/logos/logo4.png       $BASE/logo4.png
 scp /home/facu-edge/web_pitaya/logos/logo1.png       $BASE/assets/images/logo1.png
 scp /home/facu-edge/web_pitaya/logos/logo6_icon.png  $BASE/assets/images/logo6.png
+scp /home/facu-edge/web_pitaya/aplicar_mods.py       root@$IP:/root/aplicar_mods_web.py
 ```
 
-### 4. Aplicar modificaciones en HTML, CSS y JS
+> **No subir `black_list_app.js` local encima del de la placa.** El local está hecho sobre el ecosistema 2.07; el de 3.00 trae modelos y apps nuevos (Thetis, modelos 31/32). El script inserta solo el bloque `allowed_root` en el archivo de la placa. El `black_list_app.js` local queda como referencia del bloque.
 
-Ejecutar en la placa vía SSH (un único script Python hace todo):
+### 4. Aplicar (en la placa)
 
 ```bash
-python3 << 'EOF'
-import re, os
-
-BASE = '/opt/redpitaya/www/apps'
-FAVICON = '    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />\n    <link rel="icon" href="/favicon.ico" type="image/x-icon">\n'
-
-def patch(path):
-    with open(path) as f: return f.read()
-def save(path, c):
-    with open(path, 'w') as f: f.write(c)
-    print(f'OK: {path.replace(BASE+"/","")}')
-
-# ── Pantalla principal: título + favicon ─────────────────────────────────────
-p = f'{BASE}/index.html'
-c = patch(p)
-c = c.replace('<title>My Red Pitaya</title>', '<title>Edge</title>')
-c = c.replace('<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />',
-              '<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />')
-save(p, c)
-
-# ── Oscilloscope y DFT: título + favicon ─────────────────────────────────────
-for app in ['scopegenpro', 'spectrumpro']:
-    p = f'{BASE}/{app}/index.html'
-    c = patch(p)
-    c = c.replace('<title>Red Pitaya</title>', '<title>Edge</title>')
-    if '/favicon.ico' not in c:
-        c = c.replace('</head>', FAVICON + '</head>', 1)
-    save(p, c)
-
-# ── Oscilloscope y DFT: logo navbar + ícono ext_connections ──────────────────
-adc_files = [
-    f'{BASE}/scopegenpro/2ch_adc.html',
-    f'{BASE}/scopegenpro/4ch_adc.html',
-    f'{BASE}/spectrumpro/2ch_adc.html',
-    f'{BASE}/spectrumpro/4ch_adc.html',
-]
-for p in adc_files:
-    c = patch(p)
-    c = c.replace('src="../assets/images/navigation_logo.png"',
-                  'src="../assets/images/logo1.png"')
-    c = c.replace('ext_conections_w.png', 'logo6.png')
-    c = re.sub(r'(id="ext_con_but"[^>]*><img[^>]*?)height: 20px', r'\1height: 22px', c)
-    save(p, c)
-
-# ── Apps de System y Development: título + favicon + logo navbar ──────────────
-simple_apps = ['updater', 'network_manager', 'calib_app']
-for app in simple_apps:
-    p = f'{BASE}/{app}/index.html'
-    c = patch(p)
-    c = c.replace('<title>Red Pitaya</title>', '<title>Edge</title>')
-    if '/favicon.ico' not in c:
-        c = c.replace('</head>', FAVICON + '</head>', 1)
-    c = c.replace('src="../assets/images/navigation_logo.png"',
-                  'src="../assets/images/logo1.png"')
-    save(p, c)
-
-# scpi_manager: igual que arriba + ext_connections
-p = f'{BASE}/scpi_manager/index.html'
-c = patch(p)
-c = c.replace('<title>Red Pitaya</title>', '<title>Edge</title>')
-if '/favicon.ico' not in c:
-    c = c.replace('</head>', FAVICON + '</head>', 1)
-c = c.replace('src="../assets/images/navigation_logo.png"',
-              'src="../assets/images/logo1.png"')
-c = c.replace('ext_conections_w.png', 'logo6.png')
-c = re.sub(r'(id="ext_con_but"[^>]*><img[^>]*?)height: 20px', r'\1height: 22px', c)
-save(p, c)
-
-# calib_app: logo navbar en archivos adc
-for variant in ['2ch_adc.html', '4ch_adc.html']:
-    p = f'{BASE}/calib_app/{variant}'
-    c = patch(p)
-    c = c.replace('src="../assets/images/navigation_logo.png"',
-                  'src="../assets/images/logo1.png"')
-    save(p, c)
-
-# ── CSS: centrado del logo de navbar (.logo margin) ───────────────────────────
-css_files = [
-    f'{BASE}/scopegenpro/css/style.css',
-    f'{BASE}/spectrumpro/css/style.css',
-    f'{BASE}/updater/css/style.css',
-    f'{BASE}/network_manager/css/style.css',
-    f'{BASE}/scpi_manager/css/style.css',
-    f'{BASE}/calib_app/css/style.css',
-]
-for p in css_files:
-    c = patch(p)
-    updated = re.sub(
-        r'(\.logo\s*\{[^}]*margin:\s*)[^;]+(;)',
-        lambda m: m.group(1) + '11px 0px 0px 14px' + m.group(2),
-        c
-    )
-    save(p, updated)
-
-# ── scope.js: escala del waterfall al pie del gráfico + tamaño del contenedor ─
-p = f'{BASE}/spectrumpro/js/scope.js'
-c = patch(p)
-c = c.replace('modifynode.css("top","65px")', 'modifynode.css("top","188px")')
-c = c.replace('95 * SPEC.visibleCount() + 10', '220 * SPEC.visibleCount() + 10')
-save(p, c)
-
-# ── spectrumpro/css/style.css: reducir tamaño de root_plot y root_waterfall ───
-import subprocess
-css = f'{BASE}/spectrumpro/css/style.css'
-subprocess.run(['sed', '-i',
-    '-e', 's/min-height: 280px;/min-height: 210px;/g',
-    '-e', 's/max-height: 280px;/max-height: 210px;/g',
-    '-e', 's/min-height: 240px;/min-height: 180px;/g',
-    '-e', 's/max-height: 240px;/max-height: 180px;/g',
-    '-e', 's/height: 240px;/height: 180px;/g',
-    '-e', 's/margin-top: -120px;/margin-top: -90px;/g',
-    css], check=True)
-print(f'OK: spectrumpro/css/style.css')
-
-EOF
+python3 /root/aplicar_mods_web.py
 ```
+
+`aplicar_mods.py` (ecosistema 3.00):
+- Verifica primero que cada cosa a reemplazar esté en su valor de stock (titles, logos, `ext_conections_w.png`, márgenes `.logo`, waterfall 80/60/60/95/65). Si algo no coincide, **no escribe nada** y lista qué falló (ej. ya aplicado, o ecosistema distinto).
+- Crea `.bak` de cada archivo que toca (solo si no existe), CSS incluidos.
+- Conserva los finales de línea CRLF de los HTML (`newline=''`).
+- Valores del waterfall y lista de apps: constantes al principio del script (`CANVAS`, `HOLDER`, `MULT`, `TOP`, `ALLOWED_ROOT`).
+- Prueba en seco en la PC: copiar los archivos de la placa a una carpeta y correr `WEB_BASE=<carpeta> python3 aplicar_mods.py`.
+
+Para ecosistema 2.07 el script NO sirve tal cual (stock distinto: canvas 240, holder 280); ver la tabla de arriba.
 
 ### 5. Restaurar la partición a solo-lectura
 
@@ -265,28 +148,13 @@ mount -o remount,ro /opt/redpitaya
 ```bash
 ssh root@<IP_PLACA>
 mount -o remount,rw /opt/redpitaya
-
-BASE=/opt/redpitaya/www/apps
-for f in \
-  assets/black_list_app.js \
-  favicon.ico \
-  index.html \
-  scopegenpro/index.html \
-  spectrumpro/index.html \
-  updater/index.html \
-  network_manager/index.html \
-  scpi_manager/index.html \
-  calib_app/index.html \
-  spectrumpro/js/scope.js \
-  spectrumpro/css/style.css
-do
-  [ -f "$BASE/$f.bak" ] && cp "$BASE/$f.bak" "$BASE/$f" && echo "restored: $f"
-done
-
+cd /opt/redpitaya/www/apps
+find . -name "*.bak" | while read f; do cp -p "$f" "${f%.bak}" && echo "restored: ${f%.bak}"; done
+sync
 mount -o remount,ro /opt/redpitaya
 ```
 
-> Los CSS no tienen backup automático. Para revertirlos, cambiar `margin: 11px 0px 0px 14px` a `margin: 5px 0px 0px 15px` en los 6 archivos `css/style.css` de cada app.
+Todos los archivos tocados (CSS incluidos) tienen `.bak`. Los logos subidos (`logo1.png`, `logo6.png`, `logo4.png`) son archivos nuevos y pueden quedar.
 
 ---
 
