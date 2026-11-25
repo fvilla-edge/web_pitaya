@@ -31,6 +31,8 @@ Placa de laboratorio `rp-f0fd8c` (ecosistema 3.00): aplicado con `aplicar_mods.p
 
 8. **Tamaño de `root_plot` y `root_waterfall`** (DFT Spectrum Analyser): ajusta ambos bloques para que el waterfall se vea bien y entre en pantalla sin scroll. El tamaño de stock varía por ecosistema — ver tabla abajo.
 
+9. **Rango de frecuencia del DFT 0–1 MHz** (de stock 0–62,5 MHz): no es un archivo de la web sino la configuración que guarda la app, `/root/.config/redpitaya/apps/spectrumpro_2/config.json` (`"xmax":62500000` → `"xmax":1000000`). Ese archivo lo reescribe la app, así que hay que cambiarlo **con el DFT cerrado**, y solo existe después de haber abierto el DFT al menos una vez. Si alguien restablece los valores por defecto de la app o cambia el campo de frecuencia máxima en pantalla, se pierde (se arregla escribiendo 1000000 en ese campo).
+
 ### Antes de tocar el waterfall: verificar valores de stock
 
 El tamaño del waterfall depende de 4 cosas que hay que revisar en la placa ANTES de tocar nada (los valores de ejemplo son de las dos placas ya probadas):
@@ -128,6 +130,11 @@ python3 /root/aplicar_mods_web.py
 - Conserva los finales de línea CRLF de los HTML (`newline=''`).
 - Valores del waterfall y lista de apps: constantes al principio del script (`CANVAS`, `HOLDER`, `MULT`, `TOP`, `ALLOWED_ROOT`).
 - Prueba en seco en la PC: copiar los archivos de la placa a una carpeta y correr `WEB_BASE=<carpeta> python3 aplicar_mods.py`.
+- Al final aplica el punto 9 (rango DFT 1 MHz) por separado: si el `config.json` no existe o tiene otro valor, solo avisa y no frena lo demás (`.bak` al lado del archivo). Para hacer **solo** ese paso (placa ya modificada, o después de abrir el DFT por primera vez), con el DFT cerrado:
+  ```bash
+  python3 /root/aplicar_mods_web.py --solo-rango-dft
+  ```
+  Constantes `XMAX`/`XMAX_STOCK`; prueba en la PC con `DFT_CONFIG=<archivo>`.
 
 Para ecosistema 2.07 el script NO sirve tal cual (stock distinto: canvas 240, holder 280); ver la tabla de arriba.
 
@@ -154,7 +161,7 @@ sync
 mount -o remount,ro /opt/redpitaya
 ```
 
-Todos los archivos tocados (CSS incluidos) tienen `.bak`. Los logos subidos (`logo1.png`, `logo6.png`, `logo4.png`) son archivos nuevos y pueden quedar.
+Todos los archivos tocados (CSS incluidos) tienen `.bak`. El rango del DFT se revierte aparte: `cp -p /root/.config/redpitaya/apps/spectrumpro_2/config.json.bak /root/.config/redpitaya/apps/spectrumpro_2/config.json` (con el DFT cerrado). Los logos subidos (`logo1.png`, `logo6.png`, `logo4.png`) son archivos nuevos y pueden quedar.
 
 ---
 

@@ -13,6 +13,11 @@ import sys
 
 BASE = os.environ.get('WEB_BASE', '/opt/redpitaya/www/apps')
 
+# Rango de frecuencia del DFT (lo guarda la app, no la web): 0-62,5 MHz -> 0-1 MHz
+DFT_CONFIG = os.environ.get(
+    'DFT_CONFIG', '/root/.config/redpitaya/apps/spectrumpro_2/config.json')
+XMAX_STOCK, XMAX = 62500000, 1000000
+
 # Waterfall del DFT (ecosistema 3.00): canvas 60 -> 300
 CANVAS_STOCK, CANVAS = 60, 300
 HOLDER_STOCK, HOLDER = 80, 320
@@ -40,6 +45,36 @@ WHITELIST = '''
 
 })(window.Desktop = window.Desktop || {}, jQuery);''' % (
     '[' + ', '.join('"%s"' % a for a in ALLOWED_ROOT) + ']')
+
+
+
+def rango_dft():
+    """Pone xmax del DFT en 1 MHz. Independiente del resto (otro archivo,
+    lo reescribe la app): correr con el DFT CERRADO o la app lo pisa."""
+    if not os.path.isfile(DFT_CONFIG):
+        print(f'AVISO rango DFT: no existe {DFT_CONFIG}; abrir el DFT una vez, '
+              'cerrarlo y correr: python3 aplicar_mods.py --solo-rango-dft')
+        return False
+    with open(DFT_CONFIG, newline='') as f:
+        c = f.read()
+    m = re.findall(r'"xmax":(\d+)', c)
+    if m == [str(XMAX)]:
+        print(f'rango DFT: ya estaba en {XMAX} Hz')
+        return True
+    if m != [str(XMAX_STOCK)]:
+        print(f'AVISO rango DFT: xmax esperado {XMAX_STOCK}, hay {m}; no se toca')
+        return False
+    if not os.path.exists(DFT_CONFIG + '.bak'):
+        shutil.copy2(DFT_CONFIG, DFT_CONFIG + '.bak')
+    with open(DFT_CONFIG, 'w', newline='') as f:
+        f.write(c.replace(f'"xmax":{XMAX_STOCK}', f'"xmax":{XMAX}'))
+    os.sync()
+    print(f'OK: rango DFT 0-{XMAX} Hz ({DFT_CONFIG})')
+    return True
+
+
+if '--solo-rango-dft' in sys.argv[1:]:
+    sys.exit(0 if rango_dft() else 1)
 
 cambios = {}   # ruta -> contenido nuevo
 errores = []
@@ -152,3 +187,4 @@ for p, c in cambios.items():
     print('OK:', p.replace(BASE + '/', ''))
 os.sync()
 print(f'{len(cambios)} archivos modificados')
+rango_dft()
